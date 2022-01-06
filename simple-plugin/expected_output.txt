@@ -1,0 +1,3 @@
+2022/01/04 00:10:02 initializing simple-plugin
+2022/01/04 00:10:02 plugins have been initialized.
+Hello, world!

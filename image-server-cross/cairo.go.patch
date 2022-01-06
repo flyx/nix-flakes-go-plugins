@@ -1,0 +1,10 @@
+--- vendor/github.com/ungerik/go-cairo/cairo.go
++++ vendor/github.com/ungerik/go-cairo/cairo.go
+@@ -2,7 +2,6 @@
+ 
+ package cairo
+ 
+-// #cgo pkg-config: cairo
+ // #include <cairo/cairo-pdf.h>
+ // #include <cairo/cairo-ps.h>
+ // #include <cairo/cairo-svg.h>

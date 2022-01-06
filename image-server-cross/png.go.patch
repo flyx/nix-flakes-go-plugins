@@ -1,0 +1,10 @@
+--- vendor/github.com/ungerik/go-cairo/png.go
++++ vendor/github.com/ungerik/go-cairo/png.go
+@@ -3,7 +3,6 @@
+ package cairo
+
+ // #cgo CFLAGS: -Wall -O2
+-// #cgo pkg-config: cairo
+ // #include <stdio.h>
+ // #include <stdlib.h>
+ // #include <string.h>
