@@ -8,8 +8,9 @@
   };
   outputs = {self, nixpkgs, flake-utils, nix-filter, api}:
   let
-    buildApp = { pkgs, vendorSha256, plugins ? [] }:
+    buildApp = { system, vendorSha256, plugins ? [] }:
       let
+        pkgs = nixpkgs.legacyPackages.${system};
         requireFlake = modName: ''
           require ${modName} v0.0.0
           replace ${modName} => ./vendor-nix/${modName}
@@ -26,7 +27,7 @@
           };
           nativeBuildInputs = plugins;
           phases = [ "unpackPhase" "buildPhase" "installPhase" ];
-          PLUGINS_GO = import ./plugins.go.nix pkgs plugins;
+          PLUGINS_GO = import ./plugins.go.nix nixpkgs.lib plugins;
           GO_MOD_APPEND = builtins.concatStringsSep "\n"
             ((builtins.map (p: requireFlake p.goPlugin.goModName) plugins)
             ++ [(requireFlake "example.com/api")]);
@@ -56,17 +57,13 @@
           export PATH=$PATH:${pkgs.lib.makeBinPath buildInputs}
         '';
       };
-  in (flake-utils.lib.eachDefaultSystem (system:
-    let
-      pkgs = nixpkgs.legacyPackages.${system};
-    in rec {
-      packages.app = buildApp {
-        inherit pkgs;
-        vendorSha256 = "sha256-yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
-      };
-      defaultPackage = packages.app;
-    }
-  )) // {
+  in (flake-utils.lib.eachDefaultSystem (system: rec {
+    packages.app = buildApp {
+      inherit system;
+      vendorSha256 = "sha256-yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
+    };
+    defaultPackage = packages.app;
+  })) // {
     lib = {
       inherit buildApp;
       pluginMetadata = goModFile: {

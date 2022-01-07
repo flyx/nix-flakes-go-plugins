@@ -35,7 +35,7 @@
           '';
         };
         app = image-server.lib.buildApp {
-          inherit pkgs;
+          inherit system;
           vendorSha256 = "sha256-US38BDmwhrrMxvZVzEq1ch65DGDS6Mq/IO4NvgyHsQU=";
           plugins = [ plugin ];
         };

@@ -32,7 +32,7 @@
           '';
         };
         app = mainapp.lib.buildApp {
-          inherit pkgs;
+          inherit system;
           vendorSha256 = "sha256-PQyYXVGDETUxEsTT50TSyu/Tv+RQVhplSDFGw8ASpCw=";
           plugins = [ plugin ];
         };

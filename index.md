@@ -18,20 +18,20 @@ Building plugin-supporting applications in [Go](https://go.dev/) is currently a 
 In this article, I will show how to use [Nix Flakes][4] as a build system for Go supporting plugin management.
 This article has three parts, excluding the abstract you are just reading:
 
- * **Part 1: Setup for Plugin Consumption**
+ * **[Part 1: Setup for Plugin Consumption](part1/)**
  
    I will show how to set up your application as Nix Flake that can be extended with plugins, and I will show how to write a first plugin as proof-of-concept.
    This part is the one most focused on Nix Flakes.
  
- * **Part 2: APIs and Dependencies**
+ * **[Part 2: APIs and Dependencies](part2/)**
  
    I will show how to give your application a plugin API and how to consume it from within a plugin.
    I will also show how to depend on external C libraries.
  
- * **Part 3: Targets and Deployment**
+ * **[Part 3: Targets and Deployment](part3/)**
  
    I will show how to build a Windows binary from a Nix-capable host (e.g. NixOS on WSL).
-   I will also show how to build an [OCI][5] image that is consumable for example with [podman][6] or [Docker][7].
+   I will also show how to build an [OCI][5] image that is consumable for example by [podman][6] or [Docker][7].
 
 I will assume you are familiar with Nix Flakes and Go.
 If you don't know much about Nix and are in a hurry, I recommend [*this article*](https://serokell.io/blog/practical-nix-flakes) for a quick overview of the language and Flakes.
@@ -43,6 +43,7 @@ Executing the commands shown in this article will potentially trigger downloads 
  
 If you want to follow the article's constructions, create an empty directory that will be the root for all files and subdirectories we'll create.
 As with any Nix Flake, we need all files processed by Nix to be checked in to version control, so initialize a git repository in this directory with `git init`.
+All code discussed in this article is available [on GitHub][8], so if you don't want to copy code from the article, you can also just clone that repository.
 
  [1]: https://github.com/golang/go/issues/19282
  [2]: https://github.com/golang/go/issues/20481
@@ -51,3 +52,4 @@ As with any Nix Flake, we need all files processed by Nix to be checked in to ve
  [5]: https://opencontainers.org
  [6]: https://podman.io
  [7]: https://www.docker.com
+ [8]: https://github.com/flyx/nix-flakes-go-plugins

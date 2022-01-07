@@ -20,7 +20,7 @@
       zigScripts = target: pkgs.stdenvNoCC.mkDerivation {
         name = "zig-cc-scripts";
         phases = [ "buildPhase" "installPhase" ];
-        propagatedBuildInputs = [ zigPkg pkgs.coreutils ];
+        propagatedBuildInputs = [ zigPkg ];
         ZCC = zigScript target "cc";
         ZXX = zigScript target "c++";
         buildPhase = ''
@@ -63,11 +63,11 @@
         zigScriptsInst = zigScripts target;
       in {
         targetPkgs.cairo = cairo;
-        config = {
+        crossConfig = {
           CGO_ENABLED = true;
           inherit CGO_CPPFLAGS CGO_LDFLAGS;
           preBuild = ''
-            export ZIG_LOCAL_CACHE_DIR=$(${pkgs.coreutils}/bin/mktemp -d)
+            export ZIG_LOCAL_CACHE_DIR=$(pwd)/zig-cache
             export ZIG_GLOBAL_CACHE_DIR=$ZIG_LOCAL_CACHE_DIR
             export CC="${zigScriptsInst}/bin/zcc"
             export CXX="${zigScriptsInst}/bin/zxx"
@@ -96,13 +96,13 @@
           { url = "http://archive.raspberrypi.org/debian/pool/main/c/cairo/libcairo2_1.16.0-5+rpt1_armhf.deb";
             sha256 = "0wy5l77nmgyl8465bl864hjhkijlx7ipy4n9xikhnsbzcq95y61q"; }
         ];
-        CGO_CPPFLAGS = "-I${cairo}/usr/include/cairo";
+        CGO_CPPFLAGS = "-I${cairo}/usr/include/cairo -I${cairo}/usr/include";
         CGO_LDFLAGS = "-L${cairo}/usr/lib/arm-linux-gnueabihf -lcairo";
         GOOS = "linux";
         GOARCH = "arm";
       };
     };
-    buildApp = { system, vendorSha256, plugins ? [], targetPkgs ? nixpkgs.legacyPackages.${system}, config ? {} }:
+    buildApp = { system, vendorSha256, plugins ? [], targetPkgs ? nixpkgs.legacyPackages.${system}, crossConfig ? null }:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         requireFlake = modName: ''
@@ -150,15 +150,15 @@
         preBuild = ''
           export PATH=$PATH:${pkgs.lib.makeBinPath nativeBuildInputs}
         '';
-        overrideModAttrs = if targetPkgs == pkgs then null else _: {
+        overrideModAttrs = if crossConfig == null then _: {} else _: {
           postBuild = ''
             patch -p0 <${./cairo.go.patch}
             patch -p0 <${./png.go.patch}
           '';
         };
-      } // config);
-    crossBuildRPi4App = config: (buildApp (config // (platforms config.system).raspberryPi4));
-    crossBuildWin64App = config: (buildApp (config // (platforms config.system).win64));
+      } // (if crossConfig == null then {} else crossConfig));
+    crossBuildRPi4App = params: (buildApp (params // (platforms params.system).raspberryPi4));
+    crossBuildWin64App = params: (buildApp (params // (platforms params.system).win64));
   in (flake-utils.lib.eachDefaultSystem (system: rec {
     packages = {
       app = buildApp {

@@ -1,33 +1,17 @@
 package main
 
 import (
-	"example.com/api"
-	"github.com/ungerik/go-cairo"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
+	
+	"example.com/api"
+	"github.com/ungerik/go-cairo"
 )
 
 var plugins []api.Plugin
 
-func toPNG(surface *cairo.Surface) []byte {
-	tmpFile, err := ioutil.TempFile("", "")
-	if err != nil {
-		panic(err)
-	}
-	tmpFileName := tmpFile.Name()
-	defer os.Remove(tmpFileName)
-	_ = tmpFile.Close()
-	_ = surface.WriteToPNG(tmpFileName)
-	ret, err := ioutil.ReadFile(tmpFileName)
-	if err != nil {
-		panic(err)
-	}
-	return ret
-}
-
 func main() {
+	log.Println("serving at http://localhost:8080")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		surface := cairo.NewSurface(cairo.FORMAT_ARGB32, 240, 80)
 		surface.SelectFontFace("serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
@@ -40,7 +24,8 @@ func main() {
 				panic(err)
 			}
 		}
-		w.Write(toPNG(surface))
+		png, _ := surface.WriteToPNGStream()
+		w.Write(png)
 		surface.Finish()
 	})
 	

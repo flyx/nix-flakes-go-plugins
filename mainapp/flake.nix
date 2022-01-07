@@ -7,8 +7,9 @@
   };
   outputs = {self, nixpkgs, flake-utils, nix-filter}:
   let
-    buildApp = { pkgs, vendorSha256, plugins ? [] }:
+    buildApp = { system, vendorSha256, plugins ? [] }:
       let
+        pkgs = nixpkgs.legacyPackages.${system};
         requirePlugin = modName: ''
           require ${modName} v0.0.0
           replace ${modName} => ./vendor-nix/${modName}
@@ -47,17 +48,13 @@
         subPackages = [ "." ];
         inherit vendorSha256;
       };
-  in (flake-utils.lib.eachDefaultSystem (system:
-    let
-      pkgs = nixpkgs.legacyPackages.${system};
-    in rec {
-      packages.app = buildApp {
-        inherit pkgs;
-        vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
-      };
-      defaultPackage = packages.app;
-    }
-  )) // {
+  in (flake-utils.lib.eachDefaultSystem (system: rec {
+    packages.app = buildApp {
+      inherit system;
+      vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
+    };
+    defaultPackage = packages.app;
+  })) // {
     lib = {
       inherit buildApp;
       pluginMetadata = goModFile: {

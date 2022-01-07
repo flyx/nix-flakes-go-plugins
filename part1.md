@@ -12,7 +12,7 @@ The general approach is as follows:
 
  * The main application is a Nix Flake.
  * Plugins are Nix Flakes.
- * The final application is a Nix derivation that is generated from a list of plugins and outputs an executable that uses the given plugins.
+ * The final application is a Nix derivation that is generated from a list of plugins. It outputs a single executable file.
 
 Now, you are perhaps thinking
 
@@ -24,7 +24,6 @@ Compared to classical flags in a build system, using Nix Flakes does allow us to
 
  * fetch plugins from external sources.
  * add plugins the original application is not aware of.
- * check whether our application version and plugin version are compatible.
 
 What we actually lose is the possibility to combine readily compiled binaries, i.e. someone who wants to setup the application with their hand-chosen set of plugins must use Nix to compile their executable.
 Scenarios where this is impossible seem to be exotic, at least with Go projects (yes I will show later that we can build Windows binaries even though Nix doesn't support Windows as host).
@@ -59,31 +58,31 @@ Let's have an overview of what's going on here:
  * We use `nix-filter` to explicitly exclude the `flake.nix` which is something sensible to do.
    If we don't exclude `flake.nix`, any change there would trigger a rebuild even if it was unnecessary.
    Mind that `nix-filter` doesn't work on `self` so you need to give `./.`.
- * The `buildApp` function takes an instance of `nixpkgs`, along with a list of plugins, as input, and builds our application.
+ * The `buildApp` function takes the target `system`, along with a list of plugins, as input, and builds our application.
    It additionally needs a `vendorSha256`, which is the hash over all external Go modules.
    Since that hash changes if we include plugins, the value must be provided as argument.
  * You may wonder how to know the `vendorSha256` value, and the one I give here may be wrong depending on your nixpkg's Go version.
-   To know the hash you need to use, just give `pkgs.lib.fakeSha256` initially and build once.
+   To know the hash you need to use, just give `nixpkgs.lib.fakeSha256` initially and build once.
    Then, update the value to be the one that was expected as given in the error message.
  * The `pluginMetadata` function takes the path to a `go.mod` file as input and crudely extracts the module's name from it.
    It will not work for every variation of the syntax that is allowed, but works for canonical files generated via `go mod init`, which is good enough.
  * In `buildApp`, we see that plugins are to provide a set `goPlugin` which is to contain the plugin's module name.
-   Basically, we recognize a derivation being a plugin by asserting it has a `goPlugin` attribute.
+   We establish that a derivation is a consumable plugin when it has a `goPlugin` attribute.
    In an actual application, we'd use a more specialized name to ensure it is a plugin for *our* application.
 
 Using the intermediate `sources` derivation accomplishes multiple things:
 
  * The reason we create a separate derivation instead of e.g. use `postConfigure` is that `buildGoModule` uses the sources two times:
-   Once for vendoring all references, and once for building the code.
+   Once for vendoring all external module references, and once for building the code.
    The `go.mod` we modify is used for both, so instead of configuring it two times, we just create a derivation having that modification and use it as source.
- * The second reason we create a separate derivation is that we need to copy the plugin's sources into our sources.
-   This happens at the beginning of `buildPhase`, where we use the dedicated `vendor-nix` directory to copy the plugins' sources.
-   We will later redirect requests for those source to that directory via `replace` directives we create in our `go.mod`.
+ * The second reason we create a separate derivation is that we need to copy the plugin's sources into the main sources.
+   This happens at the beginning of `buildPhase`, where we use the dedicated `vendor-nix` directory to copy the plugins' sources into.
+   We will later redirect requests for those sources to that directory via `replace` directives we create in our `go.mod`.
    
-   Mind that we *cannot* redirect Go directly to a plugin's `src` directory with a `replace` directive.
-   Doing that would propagate the store path of the plugin into `vendor/modules.txt`, a file created during vendoring (part of `buildGoModule`).
+   Mind that we *cannot* redirect Go directly to a plugin's nix store directory with a `replace` directive.
+   Doing that would propagate the store path of the plugin into `vendor/modules.txt`, a file created during vendoring.
    That file is part of the `go-modules` derivation created by `buildGoModule`, which is a fixed output derivation and as such is not allowed to depend on other derivations.
-   The result would be that we will get a cryptic `error: path <…> is not valid` from Nix when trying to build our application, because the fixed output derivation contains a store path.
+   If we followed that path, Nix would complain with `error: path <…> is not valid`, because the fixed output derivation contains a store path and thus depends on other derivations, which is forbidden.
  * The application needs to know about the plugins, so we need to append plugin references to `go.mod` via `require` directives.
    Then, we create `replace` directives as discussed above so that Go finds the plugins's sources inside `vendor-nix`.
    
@@ -113,14 +112,15 @@ git add . # required for nix flake update
 nix flake update
 git add flake.lock
 git commit -a -m "initial commit"
-{% include_relative mainapp/command.bash %}
+nix run
 {% endhighlight %}
 
 (Committing is optional, but saves us from a warning that the repository is dirty.)
 This should give us:
 
 {% highlight plain %}
-{% include_relative mainapp/expected_output.txt %}
+2022/01/06 22:58:31 plugins have been initialized.
+Hello, world!
 {% endhighlight %}
 
 # Writing the First Plugin
@@ -141,11 +141,11 @@ Now to make this directory a plugin, we write the file `simple-plugin/flake.nix`
 {% include_relative simple-plugin/flake.nix %}
 {% endhighlight %}
 
-For `vendorSha256` just supply `pkgs.lib.fakeSha256` initially and then build once.
+For `vendorSha256` just supply `nixpkgs.lib.fakeSha256` initially and then build once.
 Then, update the value to be the one that was expected as given in the error message.
 
 To satisfy the assertions of the main application about plugins, we set `goPlugin` via `passthru` and use the function we defined earlier to read the plugin's module path.
-Then, we make the `plugin` derivation provide the plugin's sources in `src`.
+Then, we make the `plugin` derivation provide the plugin's sources in `src` within its nix store directory.
 
 Besides `plugin`, we provide a package `app` that is our main application extended by our plugin.
 Let us build this now!
@@ -162,7 +162,9 @@ nix run
 The output should look similar to this:
 
 {% highlight plain %}
-{% include_relative simple_plugin/expected_output.txt %}
+2022/01/04 00:10:02 initializing simple-plugin
+2022/01/04 00:10:02 plugins have been initialized.
+Hello, world!
 {% endhighlight %}
 
 We see that the plugin code is loaded.
