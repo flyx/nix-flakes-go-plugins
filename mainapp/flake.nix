@@ -4,12 +4,16 @@
     nixpkgs.url = github:NixOS/nixpkgs/nixos-21.11;
     flake-utils.url = github:numtide/flake-utils;
     nix-filter.url = github:numtide/nix-filter;
+    go-1-18.url = github:flyx/go-1.18-nix;
   };
-  outputs = {self, nixpkgs, flake-utils, nix-filter}:
+  outputs = {self, nixpkgs, flake-utils, nix-filter, go-1-18 }:
   let
     buildApp = { system, vendorSha256, plugins ? [] }:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ go-1-18.overlay ];
+        };
         requirePlugin = modName: ''
           require ${modName} v0.0.0
           replace ${modName} => ./vendor-nix/${modName}
@@ -41,7 +45,7 @@
             cp -r -t $out/src *
           '';
         };
-      in pkgs.buildGoModule {
+      in pkgs.buildGo118Module {
         name = "mainapp";
         src = sources;
         modRoot = "src";

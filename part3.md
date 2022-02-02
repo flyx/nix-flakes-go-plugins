@@ -180,7 +180,8 @@ Therefore, we define two functions that cross-build our application for the resp
 Let's have our Flake provide the native main application, along with packages for Windows and the Raspberry Pi:
 
 {% highlight nix %}
-{{ flake | slice 162, 187 | join "\n" }}
+{{ flake | slice 162, 175 | join "\n" }}
+{{ flake | slice 184, 196 | join "\n" }}
 {% endhighlight %}
 
 As discussed, we now also provide our two cross-compiling functions in the public `lib`.
@@ -231,6 +232,38 @@ Hopefully this issue will be resolved in the future so that we can actually cros
 
 ## OCI Image
 
+The last thing we'll do is to create an OCI container.
+For this, we'll simply add another package to our `image-server` (behind the `win64app`):
+
+{% highlight bash %}
+{{ flake | slice 176, 183 | join "\n"}}
+{% endhighlight %}
+
+Commit and run:
+
+{% highlight bash %}
+git commit -a -m "container image"
+nix build .#container-image
+readlink result
+{% endhighlight %}
+
+This should give you something like
+
+{% highlight plain %}
+/nix/store/wn3af4ivdk9xbwrr64ays2ygxbr00c8j-docker-image-image-server-oci.tar.gz
+{% endhighlight %}
+
+This is a gzipped tarball which can be loaded for example into Docker via `gunzip -c result | docker load`.
+
+Mind that usable Docker images must contain Linux binaries.
+On macOS, you'd need to cross-compile with Nix' actual cross-compiling system so that Nix can gather the set of all dependencies, which is not something I will explore here.
+You could instead use a NixOS VM or build image.
+
+You can of course provide a function that builds a customized image from a list of plugins; try that as an exercise.
+
+## Final Words
+
+If you have suggestions how to improve this article, you can use the GitHub repository's issue tracker.
 
 
 

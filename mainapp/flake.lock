@@ -15,6 +15,21 @@
         "type": "github"
       }
     },
+    "go-1-18": {
+      "locked": {
+        "lastModified": 1643748942,
+        "narHash": "sha256-/+ZthbTSDOpl4di/nHp0pmXXogp6YRoQkpxIq3vj03M=",
+        "owner": "flyx",
+        "repo": "go-1.18-nix",
+        "rev": "b09aa0745d332cc2c479c7c2179870e54ca0b5dd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "flyx",
+        "repo": "go-1.18-nix",
+        "type": "github"
+      }
+    },
     "nix-filter": {
       "locked": {
         "lastModified": 1620202920,
@@ -49,6 +64,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "go-1-18": "go-1-18",
         "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs"
       }
