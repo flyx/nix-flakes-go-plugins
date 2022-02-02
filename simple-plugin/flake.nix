@@ -2,17 +2,17 @@
   description = "simple plugin";
   inputs = {
     nixpkgs.url = github:NixOS/nixpkgs/nixos-21.11;
-    flake-utils.url = github:numtide/flake-utils;
+    utils.url = github:numtide/flake-utils;
     nix-filter.url = github:numtide/nix-filter;
     mainapp.url = path:../mainapp;
     mainapp.inputs = {
       nixpkgs.follows = "nixpkgs";
-      flake-utils.follows = "flake-utils";
+      utils.follows = "utils";
       nix-filter.follows = "nix-filter";
     };
   };
-  outputs = {self, nixpkgs, flake-utils, nix-filter, mainapp}:
-  flake-utils.lib.eachDefaultSystem (system:
+  outputs = {self, nixpkgs, utils, nix-filter, mainapp}:
+  utils.lib.eachDefaultSystem (system:
     let
       pkgs = nixpkgs.legacyPackages.${system};
     in rec {
@@ -33,7 +33,7 @@
         };
         app = mainapp.lib.buildApp {
           inherit system;
-          vendorSha256 = "sha256-PQyYXVGDETUxEsTT50TSyu/Tv+RQVhplSDFGw8ASpCw=";
+          vendorSha256 = "PQyYXVGDETUxEsTT50TSyu/Tv+RQVhplSDFGw8ASpCw=";
           plugins = [ plugin ];
         };
       };

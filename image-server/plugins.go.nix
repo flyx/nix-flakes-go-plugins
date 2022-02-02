@@ -6,12 +6,15 @@ package main
 import (
 	"log"
 	${concatStringsSep "\n\t"
-	  (lib.imap1 (i: p: "p${toString i} \"${p.goPlugin.goModName}\"") plugins)}
+	  (lib.imap1 (i: p: "p${toString i} \"${p.goPlugin.goModName}\"")
+		           plugins)}
 )
 
 func init() {
 	${concatStringsSep "\n\t"
-	  (lib.imap1 (i: p: "plugins = append(plugins, p${toString i}.Plugin())") plugins)}
+	  (lib.imap1
+		 (i: p: "plugins = append(plugins, p${toString i}.Plugin())")
+		 plugins)}
 	log.Println("plugins have been initialized.")
 } 
 ''

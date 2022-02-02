@@ -2,18 +2,14 @@
   description = "main application";
   inputs = {
     nixpkgs.url = github:NixOS/nixpkgs/nixos-21.11;
-    flake-utils.url = github:numtide/flake-utils;
+    utils.url = github:numtide/flake-utils;
     nix-filter.url = github:numtide/nix-filter;
-    go-1-18.url = github:flyx/go-1.18-nix;
   };
-  outputs = {self, nixpkgs, flake-utils, nix-filter, go-1-18 }:
+  outputs = {self, nixpkgs, utils, nix-filter }:
   let
     buildApp = { system, vendorSha256, plugins ? [] }:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ go-1-18.overlay ];
-        };
+        pkgs = nixpkgs.legacyPackages.${system};
         requirePlugin = modName: ''
           require ${modName} v0.0.0
           replace ${modName} => ./vendor-nix/${modName}
@@ -31,11 +27,13 @@
           phases = [ "unpackPhase" "buildPhase" "installPhase" ];
           PLUGINS_GO = import ./plugins.go.nix plugins;
           GO_MOD_APPEND = builtins.concatStringsSep "\n"
-            (builtins.map (p: requirePlugin p.goPlugin.goModName) plugins);
+            (builtins.map (p: requirePlugin p.goPlugin.goModName)
+             plugins);
           buildPhase = ''
             mkdir vendor-nix
             ${builtins.concatStringsSep "\n"
-              (builtins.map (p: vendorFlake p.goPlugin.goModName "${p}/src") plugins)}
+              (builtins.map (p: vendorFlake p.goPlugin.goModName
+               "${p}/src") plugins)}
             printenv PLUGINS_GO >plugins.go
             echo "" >>go.mod # newline
             printenv GO_MOD_APPEND >>go.mod
@@ -45,17 +43,17 @@
             cp -r -t $out/src *
           '';
         };
-      in pkgs.buildGo118Module {
+      in pkgs.buildGoModule {
         name = "mainapp";
         src = sources;
         modRoot = "src";
         subPackages = [ "." ];
         inherit vendorSha256;
       };
-  in (flake-utils.lib.eachDefaultSystem (system: rec {
+  in (utils.lib.eachDefaultSystem (system: rec {
     packages.app = buildApp {
       inherit system;
-      vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
+      vendorSha256 = "pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
     };
     defaultPackage = packages.app;
   })) // {

@@ -2,11 +2,11 @@
   description = "demo image server";
   inputs = {
     nixpkgs.url = github:NixOS/nixpkgs/nixos-21.11;
-    flake-utils.url = github:numtide/flake-utils;
+    utils.url = github:numtide/flake-utils;
     nix-filter.url = github:numtide/nix-filter;
     api.url = path:../api;
   };
-  outputs = {self, nixpkgs, flake-utils, nix-filter, api}:
+  outputs = {self, nixpkgs, utils, nix-filter, api}:
   let
     buildApp = { system, vendorSha256, plugins ? [] }:
       let
@@ -29,12 +29,13 @@
           phases = [ "unpackPhase" "buildPhase" "installPhase" ];
           PLUGINS_GO = import ./plugins.go.nix nixpkgs.lib plugins;
           GO_MOD_APPEND = builtins.concatStringsSep "\n"
-            ((builtins.map (p: requireFlake p.goPlugin.goModName) plugins)
-            ++ [(requireFlake "example.com/api")]);
+            ((builtins.map (p: requireFlake p.goPlugin.goModName)
+             plugins) ++ [(requireFlake "example.com/api")]);
           buildPhase = ''
             mkdir vendor-nix
             ${builtins.concatStringsSep "\n"
-              ((builtins.map (p: vendorFlake p.goPlugin.goModName "${p}/src") plugins)
+              ((builtins.map (p: vendorFlake p.goPlugin.goModName
+                              "${p}/src") plugins)
               ++ [(vendorFlake "example.com/api" api.src)])}
             printenv PLUGINS_GO >plugins.go
             echo "" >>go.mod # newline
@@ -57,10 +58,10 @@
           export PATH=$PATH:${pkgs.lib.makeBinPath buildInputs}
         '';
       };
-  in (flake-utils.lib.eachDefaultSystem (system: rec {
+  in (utils.lib.eachDefaultSystem (system: rec {
     packages.app = buildApp {
       inherit system;
-      vendorSha256 = "sha256-yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
+      vendorSha256 = "yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
     };
     defaultPackage = packages.app;
   })) // {

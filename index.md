@@ -6,11 +6,12 @@ kind: article
 permalink: /nix-flakes-go/
 weight: 5
 date: 2021-12-30
+has_parts: true
 ---
 
-Building plugin-supporting applications in [Go](https://go.dev/) is currently a sub-par experience:
+Building plugin-supporting applications in [Go](https://go.dev/) is currently a sub-par experience.
+Go does have a `-buildmode=plugin` that lets you create `.so` files, which can then be loaded as plugin in a Go application. But:
 
- * Go has a `-buildmode=plugin` that lets you create `.so` files, which can then be loaded as plugin in a Go application.
  * It [doesn't work on Windows][1].
  * It [doesn't work well with vendoring][2].
  * Since [shared libraries are deprecated][3], every plugin is huge because they can't share even the standard library with the main application.
@@ -41,7 +42,7 @@ This article may also be interesting for people who simply are curious how to us
 To follow the instructions in this article, you need the `nix` utility installed and Flake support enabled.
 Executing the commands shown in this article will potentially trigger downloads of multiple GB of data.
  
-If you want to follow the article's constructions, create an empty directory that will be the root for all files and subdirectories we'll create.
+If you want to follow the article's instructions, create an empty directory that will be the root for all files and subdirectories we'll create.
 As with any Nix Flake, we need all files processed by Nix to be checked in to version control, so initialize a git repository in this directory with `git init`.
 All code discussed in this article is available [on GitHub][8], so if you don't want to copy code from the article, you can also just clone that repository.
 

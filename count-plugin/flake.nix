@@ -2,17 +2,17 @@
   description = "count plugin for image-server";
   inputs = {
     nixpkgs.url = github:NixOS/nixpkgs/nixos-21.11;
-    flake-utils.url = github:numtide/flake-utils;
+    utils.url = github:numtide/flake-utils;
     nix-filter.url = github:numtide/nix-filter;
     image-server.url = path:../image-server;
     image-server.inputs = {
       nixpkgs.follows = "nixpkgs";
-      flake-utils.follows = "flake-utils";
+      utils.follows = "utils";
       nix-filter.follows = "nix-filter";
     };
   };
-  outputs = {self, nixpkgs, flake-utils, nix-filter, image-server}:
-  flake-utils.lib.eachDefaultSystem (system:
+  outputs = {self, nixpkgs, utils, nix-filter, image-server}:
+  utils.lib.eachDefaultSystem (system:
     let
       pkgs = nixpkgs.legacyPackages.${system};
     in rec {
@@ -36,7 +36,7 @@
         };
         app = image-server.lib.buildApp {
           inherit system;
-          vendorSha256 = "sha256-US38BDmwhrrMxvZVzEq1ch65DGDS6Mq/IO4NvgyHsQU=";
+          vendorSha256 = "US38BDmwhrrMxvZVzEq1ch65DGDS6Mq/IO4NvgyHsQU=";
           plugins = [ plugin ];
         };
       };

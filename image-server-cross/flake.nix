@@ -2,14 +2,14 @@
   description = "demo image server";
   inputs = {
     nixpkgs.url = github:NixOS/nixpkgs/nixos-21.11;
-    flake-utils.url = github:numtide/flake-utils;
+    utils.url = github:numtide/flake-utils;
     nix-filter.url = github:numtide/nix-filter;
     api.url = path:../api;
     zig.url = "github:arqv/zig-overlay";
     zig.inputs.nixpkgs.follows = "nixpkgs";
     go-1-18.url = github:flyx/go-1.18-nix;
   };
-  outputs = {self, nixpkgs, flake-utils, nix-filter, api, zig, go-1-18 }:
+  outputs = {self, nixpkgs, utils, nix-filter, api, zig, go-1-18 }:
   let
     go118pkgs = system: import nixpkgs {
       inherit system;
@@ -50,14 +50,15 @@
           cp -r * $out
         '';
       };
-      fromPacman = name: pacmanSources: pkgs.stdenvNoCC.mkDerivation rec {
+      fromPacman = name: pmSources: pkgs.stdenvNoCC.mkDerivation rec {
         inherit name;
-        srcs = with builtins; map fetchurl pacmanSources;
+        srcs = with builtins; map fetchurl pmSources;
         phases = [ "unpackPhase" "installPhase" ];
         nativeBuildInputs = [ pkgs.gnutar pkgs.zstd ];
         unpackPhase = builtins.concatStringsSep "\n" (builtins.map
           (src: ''
-            ${pkgs.gnutar}/bin/tar -xvpf ${src} --exclude .PKGINFO --exclude .INSTALL --exclude .MTREE --exclude .BUILDINFO
+            ${pkgs.gnutar}/bin/tar -xvpf ${src} --exclude .PKGINFO \
+              --exclude .INSTALL --exclude .MTREE --exclude .BUILDINFO
           '') srcs);
         installPhase = ''
           mkdir -p $out
@@ -92,17 +93,40 @@
           };
         in basic // (overrides (old // basic));
       };
+      msysPrefix = "https://mirror.msys2.org/mingw/clang64/" +
+                   "mingw-w64-clang-x86_64-";
+      rpiPrefix = "http://archive.raspberrypi.org/debian/pool/" +
+                  "main/c/cairo";
     in {
+      raspberryPi4 = platformConfig rec {
+        target = "arm-linux-gnueabihf";
+        cairo = fromDebs "cairo" [{
+          url = "${rpiPrefix}/libcairo2-dev_1.16.0-5+rpt1_armhf.deb";
+          sha256 =
+            "1w7vh7j664pfz4jr3v52j6wg24f3ir9hfr9j1xcpxmm8pqyj0zkv";
+        } {
+          url = "${rpiPrefix}/libcairo2_1.16.0-5+rpt1_armhf.deb";
+          sha256 =
+            "0wy5l77nmgyl8465bl864hjhkijlx7ipy4n9xikhnsbzcq95y61q";
+        }];
+        CGO_CPPFLAGS = "-I${cairo}/usr/include/cairo " +
+                       "-I${cairo}/usr/include";
+        CGO_LDFLAGS = "-L${cairo}/usr/lib/arm-linux-gnueabihf -lcairo";
+        GOOS = "linux";
+        GOARCH = "arm";
+      };
       win64 = platformConfig rec {
         target = "x86_64-windows-gnu";
         cairo = let
-          depLines = with nixpkgs.lib; splitString "\n" (fileContents ./win64-deps.txt);
+          depLines = with nixpkgs.lib;
+            splitString "\n" (fileContents ./win64-deps.txt);
           deps = with builtins; map (line: let
             parts = elemAt (nixpkgs.lib.splitString " " line);
-          in { url = "https://mirror.msys2.org/mingw/clang64/mingw-w64-clang-x86_64-${parts 1}";
+          in { url = "${msysPrefix}${parts 1}";
                sha256 = parts 0; }) depLines;
         in fromPacman "image-server-win64-deps" deps;
-        CGO_CPPFLAGS = "-I${cairo}/clang64/include/cairo -I${cairo}/clang64/include";
+        CGO_CPPFLAGS = "-I${cairo}/clang64/include/cairo " +
+                       "-I${cairo}/clang64/include";
         CGO_LDFLAGS = "-L${cairo}/clang64/lib -lcairo";
         GOOS = "windows";
         GOARCH = "amd64";
@@ -111,19 +135,6 @@
             cp -t $out/bin/windows_amd64 ${cairo}/clang64/bin/*.dll
           '';
         };
-      };
-      raspberryPi4 = platformConfig rec {
-        target = "arm-linux-gnueabihf";
-        cairo = fromDebs "cairo" [
-          { url = "http://archive.raspberrypi.org/debian/pool/main/c/cairo/libcairo2-dev_1.16.0-5+rpt1_armhf.deb";
-            sha256 = "1w7vh7j664pfz4jr3v52j6wg24f3ir9hfr9j1xcpxmm8pqyj0zkv"; }
-          { url = "http://archive.raspberrypi.org/debian/pool/main/c/cairo/libcairo2_1.16.0-5+rpt1_armhf.deb";
-            sha256 = "0wy5l77nmgyl8465bl864hjhkijlx7ipy4n9xikhnsbzcq95y61q"; }
-        ];
-        CGO_CPPFLAGS = "-I${cairo}/usr/include/cairo -I${cairo}/usr/include";
-        CGO_LDFLAGS = "-L${cairo}/usr/lib/arm-linux-gnueabihf -lcairo";
-        GOOS = "linux";
-        GOARCH = "arm";
       };
     };
     buildApp = {
@@ -148,14 +159,15 @@
           };
           nativeBuildInputs = plugins;
           phases = [ "unpackPhase" "buildPhase" "installPhase" ];
-          PLUGINS_GO = import ./plugins.go.nix pkgs plugins;
+          PLUGINS_GO = import ./plugins.go.nix nixpkgs.lib plugins;
           GO_MOD_APPEND = builtins.concatStringsSep "\n"
-            ((builtins.map (p: requireFlake p.goPlugin.goModName) plugins)
-            ++ [(requireFlake "example.com/api")]);
+            ((builtins.map (p: requireFlake p.goPlugin.goModName)
+             plugins) ++ [(requireFlake "example.com/api")]);
           buildPhase = ''
             mkdir vendor-nix
             ${builtins.concatStringsSep "\n"
-              ((builtins.map (p: vendorFlake p.goPlugin.goModName "${p}/src") plugins)
+              ((builtins.map (p: vendorFlake p.goPlugin.goModName
+                              "${p}/src") plugins)
               ++ [(vendorFlake "example.com/api" api.src)])}
             printenv PLUGINS_GO >plugins.go
             echo "" >>go.mod # newline
@@ -178,32 +190,39 @@
             export PATH=$PATH:${pkgs.lib.makeBinPath nativeBuildInputs}
           '';
         };
-      in pkgs.buildGo118Module (params // (buildGoModuleOverrides params));
-    crossBuildRPi4App = params: (buildApp (params // (platforms params.system).raspberryPi4));
-    crossBuildWin64App = params: (buildApp (params // (platforms params.system).win64));
-  in (flake-utils.lib.eachDefaultSystem (system: rec {
+      in pkgs.buildGo118Module
+        (params // (buildGoModuleOverrides params));
+    crossBuildRPi4App = params: (buildApp
+      (params // (platforms params.system).raspberryPi4));
+    crossBuildWin64App = params: (buildApp
+      (params // (platforms params.system).win64));
+  in (utils.lib.eachDefaultSystem (system: rec {
     packages = rec {
       app = buildApp {
         inherit system;
-        vendorSha256 = "sha256-yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
+        vendorSha256 =
+          "sha256-yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
       };
       rpi4app = crossBuildRPi4App {
         inherit system;
-        vendorSha256 = "sha256-LjIii/FL42ZVpxs57ndVc5zFw7oK8mIqd+1o9MMcXx4=";
+        vendorSha256 =
+          "sha256-LjIii/FL42ZVpxs57ndVc5zFw7oK8mIqd+1o9MMcXx4=";
       };
       win64app = crossBuildWin64App {
         inherit system;
-        vendorSha256 = "sha256-LjIii/FL42ZVpxs57ndVc5zFw7oK8mIqd+1o9MMcXx4=";
+        vendorSha256 =
+          "sha256-LjIii/FL42ZVpxs57ndVc5zFw7oK8mIqd+1o9MMcXx4=";
       };
-      container-image = nixpkgs.legacyPackages.${system}.dockerTools.buildImage {
-        name = "image-server-oci";
-        tag = "latest";
-        contents = app;
-        config = {
-          Cmd = "/bin/image-server";
-          ExposedPorts = { "80" = {}; };
+      container-image =
+        nixpkgs.legacyPackages.${system}.dockerTools.buildImage {
+          name = "image-server-oci";
+          tag = "latest";
+          contents = app;
+          config = {
+            Cmd = "/bin/image-server";
+            ExposedPorts = { "8080" = {}; };
+          };
         };
-      };
     };
     defaultPackage = packages.app;
   })) // {

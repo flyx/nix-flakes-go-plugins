@@ -5,7 +5,9 @@ package main
 
 import (
 	"log"
-	${builtins.foldl' (a: b: a + "\n\t_ \"${b.goPlugin.goModName}\"") "" plugins}
+	${builtins.foldl'
+	    (a: b: a + "\n\t_ \"${b.goPlugin.goModName}\"")
+	    "" plugins}
 )
 
 func init() {

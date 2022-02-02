@@ -83,8 +83,8 @@ Now we need the flake of our new application at `image-server/flake.nix`:
 {% endhighlight %}
 
 Compared to our previous iteration, we integrated the API code and give `pkgs` to `plugins.go.nix`.
-We also added `pkgs-config` and made it available in the `PATH`, and added `cairo` as dependency.
-*go-cairo* is configured to use `pkg-config` to discover how to link to `cairo`, which is why we need both.
+We also added `pkg-config`, made it available in the `PATH`, and added `cairo` as dependency.
+*go-cairo* is configured to use `pkg-config` to discover how to link to `cairo`, which is why we need those dependencies.
 
 As always, in `image-server`, check in everything and run:
 
