@@ -5,7 +5,7 @@ title_short: Nix Flakes and Go
 kind: article
 permalink: /nix-flakes-go/
 weight: 5
-date: 2021-12-30
+date: 2022-02-03
 has_parts: true
 ---
 

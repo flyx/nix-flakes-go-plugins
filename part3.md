@@ -164,7 +164,7 @@ We see that Zig likes to call the CPU architecture `x86_64` while Go calls it `a
 Windows, unlike Raspberry Pi OS, is not typically managed with a package manager.
 Therefore, we'll fetch *all* required libraries so we can package them along our binary for easy installation – this includes the *cairo* library and all libraries it depends on.
 To facilitate this, we add a `postInstall` script that copies all DLL files to the executable's location.
-To unclutter our `flake.nix`, I listed the required libraries in a separate file `win64-deps.txt`;
+To unclutter our `flake.nix`, I listed the required libraries in a separate file `image-server-cross/win64-deps.txt`;
 
 {% highlight plain %}
 {% include_relative image-server-cross/win64-deps.txt %}
