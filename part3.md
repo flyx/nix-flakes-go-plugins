@@ -2,7 +2,7 @@
 layout: default
 title: "Exploring Nix Flakes: Usable Go Plugins"
 part: 3
-parttitle: Targets and Deployment
+parttitle: Targets and Releases
 kind: article
 permalink: /nix-flakes-go/part3/
 weight: 8
@@ -22,7 +22,7 @@ While this is not wholly unsupported by Nix, the support is beta-grade at best.
 Also, the Pi is simply not a very fast machine, so we might want to cross-compile for it even if we could compile natively simply to achieve faster build times.
 
 The third target platform will be [OCI][2].
-Like it or not, containers are widely employed and Go is a common language for writing web services that are deployed via container.
+Like it or not, containers are widely employed as solution for easy deployment, and Go is a common language for writing web services that are deployed via container.
 Therefore, we will explore how to build a container image with Nix.
 
 ## Setup, Again
@@ -37,9 +37,8 @@ You can fetch the file's complete content from [the repository][3].
 ## Cross Compiling
 
 Nix [has support][4] for cross-compilation.
-This would provide us with a cross-compiling GCC that could compile our code and all its dependencies.
-However, Go is able to cross-compile by itself!
-The main reason we'd want to use Nix' cross-compiling capabilities is because we do have some C dependencies we must cross-compile.
+This would provide us with a cross-compiling GCC that could compile our C code and all its dependencies.
+Together with the standard Go compiler, which can already cross-compile Go code, we'd have a complete toolchain.
 However, this would mean that we would need to build a cross-compiling GCC *and* cross-compile the *cairo* library since there are no binary caches for that.
 That reeks of unnecessary complexity (and is also experimental: I wasn't able to get it to work on aarch64-darwin).
 
@@ -77,6 +76,7 @@ The first Flake build will take some time since it needs to build Go 1.18 (it is
 `go118pkgs` is a function that, given a `system`, instantiates nixpkgs with the given system and our Go 1.18 overlay.
 
 `platforms` is a function that, given a `system`, shall give us a set of configurations for all target platforms we want to cross-compile to.
+A *configuration* will be a function that overrides the necessary parts of our `buildGoModule` invocation.
 
 `zigScripts` creates a derivation that contains the scripts `zcc` and `zxx` which are wrappers that call zig's bundled, cross-compiling clang (as described in [the article][6] mentioned above).
 This derivation depends on the `target` parameter, which is a [Target Triplet][7] that tells Zig about our target system.
@@ -121,10 +121,10 @@ The path of least resistance for us is thus to disable retrieval of parameters v
 What we do here is:
 
  * supply the four variables `CGO_CPPFLAGS`, `CGO_LDFLAGS`, `GOOS` and `GOARCH`, which will be directly handed over to the Go compiler.
-   Since `buildGoModule` overrides `GOOS` and `GOARCH`, we set those directly in `preBuild`.
+   Since `buildGoModule` sets `GOOS` and `GOARCH`, we override those directly in `preBuild`.
  * setup `CC` and `CXX` to contain our fancy Zig wrapper scripts.
-   Again, those will be overridden somewhere because they are fairly central parameters for building, thus we set them in `preBuild`.
- * Zig uses cache directories. We must set these because else we will get errors because derivations are, obviously, not allowed to use cache directories in `$HOME`.
+   Again, those will be set by `buildGoModule`, thus we override them in `preBuild`.
+ * Zig uses cache directories. We must set these because else we will get errors since derivations are, obviously, not allowed to use cache directories in `$HOME`.
  * `CGO_ENABLED` is necessary because by default, cgo is disabled when cross-compiling.
  * patch the reference to `pkg-config` out of the `go-cairo` sources.
    This requires two patch files, so let's create them now.
@@ -153,14 +153,14 @@ We are now ready to define our first target platform:
 This is the platform for the Raspberry Pi 4.
 Since the packages there are debian-based, *cairo* is split into a main package and a dev package, which we need both to be able to link against it.
 Therefore, we fetch both packages with our helper function, which creates our `cairo` derivation from those two inputs.
-Notice how our library files in this case are inside `lib/arm-linux-gnueabihf` so we need to set up `CGO_LDFLAGS` accordingly.
+Our library files in this case are inside `lib/arm-linux-gnueabihf` so we need to set up `CGO_LDFLAGS` accordingly.
 
 {% highlight nix %}
 {{ flake | slice: 118, 22 | join: "" }}
 {% endhighlight %}
 
 This is our platform for Windows.
-We see that Zig likes to call the CPU architecture `x86_64` while Go calls it `amd64`, but those are just different names for the same thing.
+Zig calls the CPU architecture `x86_64` while Go calls it `amd64`, but those are just different names for the same thing.
 Windows, unlike Raspberry Pi OS, is not typically managed with a package manager.
 Therefore, we'll fetch *all* required libraries so we can package them along our binary for easy installation – this includes the *cairo* library and all libraries it depends on.
 To facilitate this, we add a `postInstall` script that copies all DLL files to the executable's location.
@@ -170,7 +170,7 @@ To unclutter our `flake.nix`, I listed the required libraries in a separate file
 {% include_relative image-server-cross/win64-deps.txt %}
 {% endhighlight %}
 
-I wrote this file by navigating [the webinterface](https://packages.msys2.org/package/mingw-w64-clang-x86_64-cairo?repo=clang64) like a barbarian and collecting the dependencies.
+I wrote this file by navigating [the web interface](https://packages.msys2.org/package/mingw-w64-clang-x86_64-cairo?repo=clang64) like a barbarian to collect the dependencies' closure.
 There is probably a nicer way but I don't know pacman well enough to figure it out.
 In any case, if you ever need to do this, use
 
@@ -200,13 +200,13 @@ What follows is the setup of `sources`, which has not changed at all:
 {{ flake | slice: 154, 27 | join: "" }}
 {% endhighlight %}
 
-And finally, our call to `buildGoModule`:
+And finally, our call to `buildGo118Module` (`buildGoModule` using Go 1.18, which has been added by our overlay):
 
 {% highlight nix %}
 {{ flake | slice: 181, 14 | join: "" }}
 {% endhighlight %}
 
-The main change is that we refer now to `targetPkgs.cairo`, which is the foreign library we fetched before for our target platforms.
+The main change besides Go 1.18 is that we refer now to `targetPkgs.cairo`, which can potentially be a foreign library.
 
 {% highlight nix %}
 {{ flake | slice: 195, 4 | join: "" }}
@@ -220,7 +220,7 @@ Therefore, we define these two functions that cross-build our application for th
 Let's have our Flake provide the native main application, along with packages for Windows and the Raspberry Pi:
 
 {% highlight nix %}
-{{ flake | slice: 199, 17 | join: "" }}{{ flake | slice: 225, 12 | join: "" }}
+{{ flake | slice: 199, 17 | join: "" }}{{ flake | slice: 226, 12 | join: "" }}
 {% endhighlight %}
 
 As discussed, we now also provide our two cross-compiling functions in the public `lib`.
@@ -248,24 +248,24 @@ Let's compile for Windows!
 nix build .#win64app
 {% endhighlight %}
 
-This should give us a nice `result`.
-People on Linux can run this via `wine`, or so I'm told:
+This should give us `result/bin/windows_amd64`, where we'll find `image-server.exe` along with all required DLLs.
+If you have a Windows system, you can test the executable there.
+People on Linux can run it via `wine`, or so I'm told (untested):
 
 {% highlight bash %}
 nix run nixpkgs#wine.wineWowPackages.stable -- result/bin/windows_amd64/image-server.exe
 {% endhighlight %}
 
-However, this is not supported on macOS.
-You can of course test it on an actual Windows installation if you have one.
+However, this seems to not be supported on macOS.
 
-Let's try the Raspberry Pi build:
+Let's test the Raspberry Pi build:
 
 {% highlight bash %}
 nix build .#rpi4app
 {% endhighlight %}
 
 Aaand that fails at the time of writing – we're hitting a [known Zig issue][10].
-Zig is, after all, pre-1.0 software, so let's not blame it.
+Zig is, after all, pre-1.0 software.
 We did get pretty far though!
 Hopefully this issue will be resolved in the future so that we can actually cross-compile to the Raspberry Pi.
 
@@ -275,7 +275,7 @@ The last thing we'll do is to create an OCI container image.
 For this, we'll simply add another package to our `image-server` (behind the `win64app`):
 
 {% highlight bash %}
-{{ flake | slice: 216, 9 | join: ""}}
+{{ flake | slice: 216, 10 | join: ""}}
 {% endhighlight %}
 
 Commit and run:
@@ -298,13 +298,15 @@ This is a gzipped tarball which can be loaded for example into Docker via
 gunzip -c result | docker load
 {% endhighlight %}
 
-I won't go into details about how to run Docker images since that documented in detail elsewhere.
+I won't go into details about how to run Docker images since that is documented in detail elsewhere.
+You can also directly [consume OCI containers in NixOS][12]!
 
-Mind that usable Docker images must contain Linux binaries.
-On macOS, you'd need to cross-compile with Nix' actual cross-compiling system so that Nix can gather the set of all dependencies, which is not something I will explore here.
-You could instead use a NixOS VM or build image.
+Usable Docker images must contain Linux binaries, therefore this won't work on macOS.
+The easiest solution there would probably be to use a NixOS build container or VM.
+You could possibly also set up Nix' actual cross-compiling system, but this is not something I will explore here.
 
-You can of course provide a function that builds a customized image from a list of plugins; try that as an exercise.
+Our `container-image` derivation contains only the main application without any plugins.
+As an exercise, write a function that can build an image from a list of plugins!
 
 ## Conclusion
 
@@ -316,9 +318,9 @@ The error we ran into when trying to build for the Raspberry Pi is just missing 
 
 ## Final Words
 
-The topics explored in this article are quite complex.
-It is likely that there are flaws in it.
-If you have suggestions how to improve the article, you can use the GitHub repository's [issue tracker][11].
+The topics we explored are quite complex.
+It is likely that there are flaws in this article.
+If you have suggestions on how to improve it, you can use the GitHub repository's [issue tracker][11].
 
  [1]: https://github.com/Trundle/NixOS-WSL
  [2]: https://opencontainers.org
@@ -331,3 +333,4 @@ If you have suggestions how to improve the article, you can use the GitHub repos
  [9]: http://archive.raspberrypi.org/debian/pool/main/
  [10]: https://github.com/ziglang/zig/issues/3287
  [11]: https://github.com/flyx/nix-flakes-go-plugins/issues
+ [12]: https://nixos.wiki/wiki/NixOS_Containers
