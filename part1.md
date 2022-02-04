@@ -30,13 +30,8 @@ But we do preserve most features of runtime-injected plugins, including:
  * The original application does not need to know the plugins we're injecting.
 
 What we actually lose is the possibility to combine readily compiled binaries, i.e. someone who wants to setup the application with their hand-chosen set of plugins must use Nix to compile their executable.
-
-This might seem like a drawback of our approach.
-However, we are simply using Nix as a build system.
-While Go libraries tend to not use any build system other than the Go compiler itself, an application will likely need one anyway, for example to bundle resources or build container images.
-We are thus simply choosing Nix instead of some other build system (like e.g. a Makefile, a Dockerfile or whatever else you can imagine).
-
-An actual drawback is that Nix does not support all platforms Go supports, most prominently Windows.
+Given that Go applications are often installed via `go get` anyway, this doesn't seem too much of a problem in general.
+However, Nix does not support all platforms Go supports, most prominently Windows.
 To remedy this, I will show in part 3 how to release for Windows from a Nix-capable host.
 
 ## Setting up the Main Application
