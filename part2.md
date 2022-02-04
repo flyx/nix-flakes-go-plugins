@@ -173,9 +173,11 @@ A tailored setup with a defined set of plugins would be written in an own Flake 
 let
   refPlugin = url: {
     inherit url;
-    nixpkgs.follows = "nixpkgs";
-    utils.follows = "utils";
-    image-server.follows = "image-server";
+    inputs = {
+      nixpkgs.follows = "nixpkgs";
+      utils.follows = "utils";
+      image-server.follows = "image-server";
+    };
   };
 in {
   description = "Tailored image-server";
@@ -184,8 +186,8 @@ in {
     utils.url = github:numtide/flake-utils;
     image-server = {
       url = path:../image-server;
-      nixpkgs.follows = "nixpkgs";
-      utils.follows = "utils";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.utils.follows = "utils";
     };
     first = refPlugin path:../first-plugin;
     second = refPlugin path:../second-plugin;
