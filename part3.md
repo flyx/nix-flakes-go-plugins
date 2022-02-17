@@ -60,7 +60,7 @@ Without further ado, let's start writing `image-server-cross/flake.nix`:
 {{ flake | slice: 0, 12 | join: ""}}
 {% endhighlight %}
 
-We include Zig from a Flake instead of from `nixpkgs` to have the latest `0.9.0` version.
+We include Zig from a Flake instead of from `nixpkgs` to have the latest `0.9.1` version.
 We also include Go 1.18, which has not yet been released but is available as beta version.
 Go 1.18 fixes an [vital issue](https://github.com/golang/go/issues/43886) with cross-compiling for Windows.
 
@@ -70,13 +70,16 @@ I created the `go-1.18` overlay primarily for this article.
 The first Flake build will take some time since it needs to build Go 1.18 (it is not available in the binary cache).
 
 {% highlight nix %}
-{{ flake | slice: 12, 29 | join: ""}}
+{{ flake | slice: 12, 42 | join: ""}}
 {% endhighlight %}
 
 `go118pkgs` is a function that, given a `system`, instantiates nixpkgs with the given system and our Go 1.18 overlay.
 
 `platforms` is a function that, given a `system`, shall give us a set of configurations for all target platforms we want to cross-compile to.
 A *configuration* will be a function that overrides the necessary parts of our `buildGoModule` invocation.
+
+In `zigPkg` I modify the original package by including a glibc header file that [is missing](https://github.com/ziglang/zig/issues/3287) in the current release.
+We'll need it to target the Raspberry Pi.
 
 `zigScripts` creates a derivation that contains the scripts `zcc` and `zxx` which are wrappers that call zig's bundled, cross-compiling clang (as described in [the article][6] mentioned above).
 This derivation depends on the `target` parameter, which is a [Target Triplet][7] that tells Zig about our target system.
@@ -97,7 +100,7 @@ For the Raspberry Pi, it will be [the repository of Raspberry Pi OS][9] (no fanc
 Let's write functions for those two package managers that we can use to pull packages from their repositories:
 
 {% highlight nix %}
-{{ flake | slice: 41, 27 | join: ""}}
+{{ flake | slice: 54, 27 | join: ""}}
 {% endhighlight %}
 
 Each function takes a `name`, that will be the name of the generated derivation, and a list of sources, which are inputs to `fetchurl`.
@@ -114,7 +117,7 @@ The foreign packages we will fetch do come with *pkg-config* descriptions, but t
 The path of least resistance for us is thus to disable retrieval of parameters via *pkg-config* and instead just supply the C flags manually.
 
 {% highlight nix %}
-{{ flake | slice: 68, 28 | join: "" }}
+{{ flake | slice: 81, 28 | join: "" }}
 {% endhighlight %}
 
 `platformConfig` defines the general framework shared by our target platforms.
@@ -147,7 +150,7 @@ Back to our `flake.nix`.
 We are now ready to define our first target platform:
 
 {% highlight nix %}
-{{ flake | slice: 96, 22 | join: "" }}
+{{ flake | slice: 109, 22 | join: "" }}
 {% endhighlight %}
 
 This is the platform for the Raspberry Pi 4.
@@ -156,7 +159,7 @@ Therefore, we fetch both packages with our helper function, which creates our `c
 Our library files in this case are inside `lib/arm-linux-gnueabihf` so we need to set up `CGO_LDFLAGS` accordingly.
 
 {% highlight nix %}
-{{ flake | slice: 118, 22 | join: "" }}
+{{ flake | slice: 131, 22 | join: "" }}
 {% endhighlight %}
 
 This is our platform for Windows.
@@ -187,7 +190,7 @@ We're back in our `flake.nix`!
 Compared to our previous setup, our new `buildApp` gains two parameters, `targetPkgs` and `buildGoModuleOverrides`:
 
 {% highlight nix %}
-{{ flake | slice: 140, 14 | join: "" }}
+{{ flake | slice: 153, 14 | join: "" }}
 {% endhighlight %}
 
 `targetPkgs` is the list of packages for the target system, which can potentially contain foreign packages.
@@ -197,30 +200,46 @@ But, if not specified explicitly, it will just be the same as our host system's 
 What follows is the setup of `sources`, which has not changed at all:
 
 {% highlight nix %}
-{{ flake | slice: 154, 27 | join: "" }}
+{{ flake | slice: 167, 27 | join: "" }}
 {% endhighlight %}
 
 And finally, our call to `buildGo118Module` (`buildGoModule` using Go 1.18, which has been added by our overlay):
 
 {% highlight nix %}
-{{ flake | slice: 181, 14 | join: "" }}
+{{ flake | slice: 194, 14 | join: "" }}
 {% endhighlight %}
 
 The main change besides Go 1.18 is that we refer now to `targetPkgs.cairo`, which can potentially be a foreign library.
 
 {% highlight nix %}
-{{ flake | slice: 195, 4 | join: "" }}
+{{ flake | slice: 208, 4 | join: "" }}
 {% endhighlight %}
 
 Not only do we want to be able to cross-compile in the main application's Flake, we obviously also want plugin Flakes to be able to do it.
 Therefore, we define these two functions that cross-build our application for the respective targets, which take the same parameters as `buildApp`.
+
+As discussed before, the Windows package bundles all required DLLs, but the Raspberry Pi package doesn't and instead expects the required libraries to be install by the system's package manager.
+This reeks like something we can automate, so let's do it:
+
+{% highlight nix %}
+{{ flake | slice: 212, 30 | join: "" }}
+{% endhighlight %}
+
+This will emit a nice Debian package we can install on the target system via
+
+{% highlight plain %}
+sudo apt install ./image-server-cross_1.0-1.deb
+{% endhighlight %}
+
+This will take care of installing all dependencies.
+(Note: This is a proof-of-concept and ignores best practices for creating Debian packages.)
 
 ## The Flake's Packages
 
 Let's have our Flake provide the native main application, along with packages for Windows and the Raspberry Pi:
 
 {% highlight nix %}
-{{ flake | slice: 199, 17 | join: "" }}{{ flake | slice: 226, 12 | join: "" }}
+{{ flake | slice: 242, 17 | join: "" }}{{ flake | slice: 269, 12 | join: "" }}
 {% endhighlight %}
 
 As discussed, we now also provide our two cross-compiling functions in the public `lib`.
@@ -261,21 +280,26 @@ However, this seems to not be supported on macOS.
 Let's test the Raspberry Pi build:
 
 {% highlight bash %}
-nix build .#rpi4app
+nix build .#rpi4deb
+readlink result
 {% endhighlight %}
 
-Aaand that fails at the time of writing – we're hitting a [known Zig issue][10].
-Zig is, after all, pre-1.0 software.
-We did get pretty far though!
-Hopefully this issue will be resolved in the future so that we can actually cross-compile to the Raspberry Pi.
+This gives us something like:
+
+{% highlight plain %}
+/nix/store/xsdxn6xlq2inxkfcr20504wjd2b429w3-image-server-cross_1.0-1.deb
+{% endhighlight %}
+
+This can be copied to your Raspberry Pi and installed via `apt install`.
+Success!
 
 ## OCI Image
 
 The last thing we'll do is to create an OCI container image.
 For this, we'll simply add another package to our `image-server` (behind the `win64app`):
 
-{% highlight bash %}
-{{ flake | slice: 216, 10 | join: ""}}
+{% highlight nix %}
+{{ flake | slice: 259, 10 | join: ""}}
 {% endhighlight %}
 
 Commit and run:

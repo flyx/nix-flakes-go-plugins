@@ -6,6 +6,7 @@ kind: article
 permalink: /nix-flakes-go/
 weight: 5
 date: 2022-02-04
+updated: 2022-02-17
 has_parts: true
 ---
 
@@ -48,6 +49,12 @@ Executing the commands shown in this article will potentially trigger downloads 
 If you want to follow the article's instructions, create an empty directory that will be the root for all files and subdirectories we'll create
 We need all files processed by Nix to be checked in to version control, so initialize a git repository in this directory with `git init`.
 All code discussed in this article is available [on GitHub][8], so if you don't want to copy code from the article, you can also just clone that repository.
+
+## Changelog
+
+### 2022-02-17
+
+ * +Working RPi 4 build and .deb package creation.
 
  [1]: https://github.com/golang/go/issues/19282
  [2]: https://github.com/golang/go/issues/20481

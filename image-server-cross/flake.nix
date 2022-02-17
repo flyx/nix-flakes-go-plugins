@@ -17,7 +17,20 @@
     };
     platforms = system: let
       pkgs = go118pkgs system;
-      zigPkg = zig.packages.${system}."0.9.0";
+      zigPkg = zig.packages.${system}."0.9.1".overrideAttrs (old: {
+        installPhase = let
+          armFeatures = builtins.fetchurl {
+            url = "https://sourceware.org/git/?p=glibc.git;"    +
+                  "a=blob_plain;f=sysdeps/arm/arm-features.h;"  +
+                  "h=80a1e2272b5b4ee0976a410317341b5ee601b794;" +
+                  "hb=0281c7a7ec8f3f46d8e6f5f3d7fca548946dbfce";
+            name = "glibc-2.35_arm-features.h";
+            sha256 =
+              "1g4yb51srrfbd4289yj0vrpzzp2rlxllxgz8q4a5zw1n654wzs5a";
+          };
+        in old.installPhase + "\ncp ${armFeatures} " +
+          "$out/lib/libc/glibc/sysdeps/arm/arm-features.h";
+      });
       zigScript = target: command: ''
         #!/bin/sh
         ${zigPkg}/bin/zig ${command} -target ${target} $@
@@ -196,6 +209,36 @@
       (params // (platforms params.system).raspberryPi4));
     crossBuildWin64App = params: (buildApp
       (params // (platforms params.system).win64));
+    crossBuildRPi4Deb = params: let
+      pkgs = go118pkgs params.system;
+      app = crossBuildRPi4App params;
+      debName = "image-server-cross";
+      debVersion = "1.0-1";
+    in pkgs.stdenvNoCC.mkDerivation {
+      name = "${debName}_${debVersion}.deb";
+      phases = [ "unpackPhase" "buildPhase" "installPhase" ];
+      CONTROL = ''
+        Package: ${debName}
+        Version: ${debVersion}
+        Section: base
+        Priority: optional
+        Architecture: armhf
+        Depends: libcairo2 (>= 1.16.0)
+        Maintainer: Karl Koch <contact@example.com>
+        Description: Nix+Go Demo Debian Package
+      '';
+      unpackPhase = ''
+        mkdir -p ${debName}_${debVersion}/{usr/local/bin,DEBIAN}
+        printenv CONTROL > ${debName}_${debVersion}/DEBIAN/control
+        cp ${app}/bin/linux_arm/image-server ${debName}_${debVersion}/usr/local/bin/
+      '';
+      buildPhase = ''
+        ${pkgs.dpkg}/bin/dpkg-deb --build ${debName}_${debVersion}
+      '';
+      installPhase = ''
+        cp *.deb $out
+      '';
+    };
   in (utils.lib.eachDefaultSystem (system: rec {
     packages = rec {
       app = buildApp {
@@ -203,7 +246,7 @@
         vendorSha256 =
           "sha256-yII94225qx8EAMizoPA9BSRP9lz0JL/UoPDNYROcvNw=";
       };
-      rpi4app = crossBuildRPi4App {
+      rpi4deb = crossBuildRPi4Deb {
         inherit system;
         vendorSha256 =
           "sha256-LjIii/FL42ZVpxs57ndVc5zFw7oK8mIqd+1o9MMcXx4=";
@@ -227,7 +270,7 @@
     defaultPackage = packages.app;
   })) // {
     lib = {
-      inherit buildApp crossBuildRPi4App crossBuildWin64App;
+      inherit buildApp crossBuildRPi4Deb crossBuildWin64App;
       pluginMetadata = goModFile: {
         goModName = with builtins; head
           (match "module ([^[:space:]]+).*" (readFile goModFile));
